@@ -10,15 +10,21 @@ with open(os.path.join(__location__, 'input')) as f:
 with open(os.path.join(__location__, './output'), "w") as f:
     f.close()
 
-key_idx = 0
-for line in in_text: 
+
+def repeating_key_xor(inp: bytearray, key: bytes):
+    key_idx = 0
     xored_bytes = bytearray()
-    for byte in bytearray(line, 'utf-8'):
+    for byte in inp:
         xored = byte ^ key[key_idx]
         key_idx += 1
         key_idx %= len(key)
         xored_bytes.append(xored)
+    return xored_bytes
 
-    with open(os.path.join(__location__, './output'), "a") as f:
-        f.write(xored_bytes.hex())
-    
+
+bytes = bytearray()
+for line in in_text:
+    bytes += bytearray(line, 'utf-8')
+
+with open(os.path.join(__location__, './output'), "a") as f:
+    f.write(repeating_key_xor(bytes, key).hex())
