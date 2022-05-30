@@ -2,8 +2,10 @@
 from Crypto.Cipher import AES
 import os
 import base64
+from Crypto.Random import get_random_bytes
+from Crypto.Random.random import randint
 
-static_key = bytearray(b'Zz57MKebLR8BombK')
+static_key = bytearray(b'zKdfx6rLw2DhfUjX')
 
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
@@ -32,7 +34,9 @@ def aes_ecb_enc(pt: bytearray, key: bytearray):
 
 
 def encryption_oracle(pt: bytearray):
-    new_pt = pt + secret_bytes
+    prefix_len = randint(1, 16)
+    prefix = bytearray(get_random_bytes(prefix_len))
+    new_pt = prefix + pt + secret_bytes
     return aes_ecb_enc(new_pt, static_key)
 
 
@@ -48,13 +52,22 @@ def detect_ecb(inp: bytearray, N: int):
     return False
 
 
-tbs = 0
-for block_size in range(2, 100):
-    pt = bytearray(b'A' * block_size * 2)
-    if detect_ecb(encryption_oracle(pt), block_size):
-        print("Found block size! " + str(block_size) + " bytes")
-        tbs = block_size
-        break
+def find_delimiter():
+    pt = b'B' * 32
+    ct1 = encryption_oracle(pt)
+    ct2 = encryption_oracle(pt)
+    blocks1 = [ct1[(i * 16): ((i + 1) * 16)]
+               for i in range(len(ct1) // 16)]
+    blocks2 = [ct2[(i * 16): ((i + 1) * 16)]
+               for i in range(len(ct1) // 16)]
+    for block1 in blocks1:
+        for block2 in blocks2:
+            if block1 == block2:
+                return bytearray(block1)
+
+
+tbs = 16
+delimiter = find_delimiter()
 
 known_bytes = bytearray()
 len_secret = len(encryption_oracle(bytearray(b'A' * tbs))) - tbs
@@ -62,21 +75,41 @@ len_secret = len(encryption_oracle(bytearray(b'A' * tbs))) - tbs
 for pos in range(tbs):
     mock_bytes_root = bytearray(b'A' * (tbs - pos - 1) + known_bytes)
     for guess in range(256):
-        mock_bytes = bytearray(mock_bytes_root)
+        mock_bytes = bytearray(b'B' * 16)
+        mock_bytes += bytearray(mock_bytes_root)
         mock_bytes.append(guess)
         mock_bytes += b'A' * (tbs - pos - 1)
-        if detect_ecb(encryption_oracle(mock_bytes), tbs):
+        found_delimiter = False
+        ct = None
+        while not found_delimiter:
+            dup_mock_bytes = bytearray(mock_bytes)
+            ct = encryption_oracle(dup_mock_bytes)
+            ct_blocks = [ct[(i * 16): ((i + 1) * 16)]
+                         for i in range(len(ct) // 16)]
+            for block in ct_blocks:
+                found_delimiter |= block == delimiter
+        if detect_ecb(ct, tbs):
             known_bytes.append(guess)
             break
 
 for pos in range(len_secret - tbs):
     mock_bytes_root = known_bytes[pos + 1: pos + tbs]
     for guess in range(256):
-        mock_bytes = bytearray(mock_bytes_root)
+        mock_bytes = bytearray(b'B' * 16)
+        mock_bytes += bytearray(mock_bytes_root)
         mock_bytes.append(guess)
         offset = tbs - pos % tbs - 1
         mock_bytes += b'A' * offset
-        if detect_ecb(encryption_oracle(mock_bytes), tbs):
+        found_delimiter = False
+        ct = None
+        while not found_delimiter:
+            dup_mock_bytes = bytearray(mock_bytes)
+            ct = encryption_oracle(dup_mock_bytes)
+            ct_blocks = [ct[(i * 16): ((i + 1) * 16)]
+                         for i in range(len(ct) // 16)]
+            for block in ct_blocks:
+                found_delimiter |= block == delimiter
+        if detect_ecb(ct, tbs):
             known_bytes.append(guess)
             break
 
