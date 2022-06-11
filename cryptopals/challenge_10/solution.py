@@ -16,10 +16,12 @@ def pkcs7_padding(inp: bytearray, block_size: int):
 
 def check_pkcs7_padding(inp: bytearray, block_size: int):
     if len(inp) % block_size != 0:
-        print("Wrong input type for PKCS#7 padding")
+        print("Wrong input size for PKCS#7 padding")
         exit(-1)
     padding_block = inp[-1]
-    for idx in range(1, padding_block):
+    if padding_block == 0:
+        return False
+    for idx in range(1, padding_block + 1):
         if inp[(-1) * idx] != padding_block:
             return False
     return True

@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-from random import randrange
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 from Crypto.Random.random import randint
